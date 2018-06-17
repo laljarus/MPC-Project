@@ -65,11 +65,53 @@ Eigen::VectorXd polyfit(Eigen::VectorXd xvals, Eigen::VectorXd yvals,
   return result;
 }
 
+Eigen::VectorXd globalKinematic(Eigen::VectorXd state,
+                                Eigen::VectorXd actuators,Eigen::VectorXd coeffs, double dt,int N) {
+  Eigen::VectorXd next_state(state.size());
+  
+  //TODO: Implement the Global Kinematic Model, to return
+  // the next state from inputs
+
+  // NOTE: state is [x, y, psi, v]
+  // NOTE: actuators is [delta, a]
+  
+  //Add your code below
+  double x = state(0);
+  double y = state(1);
+  double psi = state(2);
+  double v = state(3);   
+  double Lf = 2.67;
+  double f = coeffs[0] + coeffs[1]*x + coeffs[2]*x*x;
+  double psides = atan(coeffs[1]+coeffs[2]*x);
+  
+  for (int i = 0;i<N;i++){
+	  
+	next_state(0) = x + v*cos(psi)*dt;
+	next_state(1) = y + v*sin(psi)*dt;
+	next_state(2) = psi - (v*actuators(0)*dt)/Lf;
+	next_state(3) = v +  actuators(1)*dt;
+	next_state(4) = f - y + v*sin(psi)*dt;
+	next_state(5) = psides - psi - (v*actuators(0)*dt)/Lf;
+	std::cout <<"delta : "<<actuators[0]<<"\t a : "<<actuators[1]<<std::endl;
+	std::cout <<"Coeffs: "<<coeffs[0]<<"\t"<<coeffs[1]<<"\t"<<coeffs[2]<<std::endl;
+	
+	x = next_state(0);
+	y = next_state(1);
+	psi = next_state(2);
+	v = next_state(3);		
+	  
+  } 
+ 
+  return next_state;
+}
+
+
 int main() {
   uWS::Hub h;
 
   // MPC is initialized here!
   MPC mpc;
+  
 
   h.onMessage([&mpc](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
@@ -77,7 +119,7 @@ int main() {
     // The 4 signifies a websocket message
     // The 2 signifies a websocket event
     string sdata = string(data).substr(0, length);
-    cout << sdata << endl;
+    //cout << sdata << endl;
     if (sdata.size() > 2 && sdata[0] == '4' && sdata[1] == '2') {
       string s = hasData(sdata);
       if (s != "") {
@@ -91,6 +133,40 @@ int main() {
           double py = j[1]["y"];
           double psi = j[1]["psi"];
           double v = j[1]["speed"];
+		  double steer_angle = j[1]["steering_angle"];
+		  double throttle = j[1]["throttle"];		  	  
+		  
+		  /* Eigen::VectorXd state(4);
+		  state<<px,py,psi,v;		  		  
+		  
+		  Eigen:: VectorXd actuate(2);
+		  actuate<<steer_angle,throttle;  
+		   	  
+		  		  
+		  Eigen::VectorXd new_state = globalKinematic(state,actuate,0.1,1);		  
+		  
+		  
+		  std::cout<< "Old_state: "<<state<<std::endl;
+		  std::cout<<"New_state: "<<new_state<<std::endl;
+		  
+		  px = new_state(0);
+		  py = new_state(1);
+		  psi = new_state(2);
+		  v = new_state(3);
+		   */
+		   
+		  for (size_t i =0;i < ptsx.size();i++){
+			  double x_car = ptsx[i] - px;
+			  double y_car = ptsy[i] - py;
+			  		  
+			  ptsx[i] = cos(psi)*x_car + sin(psi)*y_car;
+			  ptsy[i] = -sin(psi)*x_car + cos(psi)*y_car;			  
+		  }	  
+		  		  
+		  		  
+		  Eigen::VectorXd sx = Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(ptsx.data(), ptsx.size());
+		  Eigen::VectorXd sy = Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(ptsy.data(), ptsy.size());
+		  
 
           /*
           * TODO: Calculate steering angle and throttle using MPC.
@@ -98,8 +174,29 @@ int main() {
           * Both are in between [-1, 1].
           *
           */
-          double steer_value;
-          double throttle_value;
+		  auto coeffs = polyfit(sx,sy,2) ;
+		  
+		  // Cross Track Error
+		  double cte = polyeval(coeffs,0);		  
+		  double epsi = atan(coeffs[1]+coeffs[2]*0);	 		  	  	 
+		  
+		  Eigen::VectorXd input_state(6);
+		  input_state << 0,0,0, v, cte, epsi;	  
+		  
+		  /* Eigen:: VectorXd actuate(2);
+		  actuate<<steer_angle,throttle;  
+		  
+		  std::cout<< "Old_state: "<<input_state<<std::endl;
+		  
+		  input_state = globalKinematic(input_state,actuate,coeffs,0.1,1);
+		  
+		  std::cout<<"New_state: "<<input_state<<std::endl; */
+		  
+		  auto vars = mpc.Solve(input_state, coeffs);		  		  
+		  
+          double steer_value = vars[0]/deg2rad(25);
+          double throttle_value = vars[1];	  
+		 
 
           json msgJson;
           // NOTE: Remember to divide by deg2rad(25) before you send the steering value back.
@@ -110,6 +207,19 @@ int main() {
           //Display the MPC predicted trajectory 
           vector<double> mpc_x_vals;
           vector<double> mpc_y_vals;
+		  
+		  
+		  for(unsigned int i = 2;i < vars.size();i++){
+			  if(i%2==0){
+				
+				mpc_x_vals.push_back(vars[i]);		
+				
+			  }else {
+				  
+				mpc_y_vals.push_back(vars[i]);
+			  }
+			  
+		  }
 
           //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
           // the points in the simulator are connected by a Green line
@@ -120,16 +230,28 @@ int main() {
           //Display the waypoints/reference line
           vector<double> next_x_vals;
           vector<double> next_y_vals;
+		  
+		  
+		  double inc_value = 2.5;
+		  int num_points = 25;
+		  for(int i = 0;i < num_points;i++){
+			  
+			  next_x_vals.push_back(inc_value*i);
+			  next_y_vals.push_back(polyeval(coeffs,inc_value*i));
+		  }
 
           //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
           // the points in the simulator are connected by a Yellow line
+		  
+		  //next_x_vals = ptsx;
+		  //next_y_vals = ptsy;
 
           msgJson["next_x"] = next_x_vals;
           msgJson["next_y"] = next_y_vals;
 
 
           auto msg = "42[\"steer\"," + msgJson.dump() + "]";
-          std::cout << msg << std::endl;
+          //std::cout << msg << std::endl;
           // Latency
           // The purpose is to mimic real driving conditions where
           // the car does actuate the commands instantly.
@@ -139,7 +261,7 @@ int main() {
           //
           // NOTE: REMEMBER TO SET THIS TO 100 MILLISECONDS BEFORE
           // SUBMITTING.
-          this_thread::sleep_for(chrono::milliseconds(100));
+          this_thread::sleep_for(chrono::milliseconds(0));
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
         }
       } else {
