@@ -6,7 +6,7 @@
 using CppAD::AD;
 
 // TODO: Set the timestep length and duration
-size_t N = 10;
+size_t N = 12;
 double dt = 0.1;
 /* 
 constexpr double pi() { return M_PI; }
@@ -69,27 +69,40 @@ class FG_eval {
     // index 0 of `fg`.
     // This bumps up the position of all the other values.
 	// The part of the cost based on the reference state.
+	
+	
     for (size_t t = 0; t < N; t++) {
-      fg[0] += 100*CppAD::pow(vars[cte_start + t], 2);
-      fg[0] += 100*CppAD::pow(vars[epsi_start + t], 2);
-      fg[0] += CppAD::pow(vars[v_start + t] - ref_v, 2);
+      fg[0] += 2500*CppAD::pow(vars[cte_start + t], 2);
+      fg[0] += 2500*CppAD::pow(vars[epsi_start + t], 2);
+      fg[0] += 10*CppAD::pow(vars[v_start + t] - ref_v, 2);
     }
 
     // Minimize the use of actuators.
 	
     for (size_t t = 0; t < N - 1; t++) {
-      fg[0] += 50*CppAD::pow(vars[delta_start + t], 2);
-      fg[0] += 10*CppAD::pow(vars[a_start + t], 2);
+      fg[0] += 600*CppAD::pow(vars[delta_start + t], 2);
+      fg[0] += 100*CppAD::pow(vars[a_start + t], 2);
     }
 	
 	
 
     // Minimize the value gap between sequential actuations.
     for (size_t t = 0; t < N - 2; t++) {
-      fg[0] += 100*CppAD::pow(vars[delta_start + t + 1] - vars[delta_start + t], 2);
-      fg[0] += 100*CppAD::pow(vars[a_start + t + 1] - vars[a_start + t], 2);
+      fg[0] += 500*CppAD::pow(vars[delta_start + t + 1] - vars[delta_start + t], 2);
+      fg[0] += 200*CppAD::pow(vars[a_start + t + 1] - vars[a_start + t], 2);
     }	
 	
+	// Minimize the lateral acceleration
+	for(size_t t = 0 ;t < N - 1; t++){
+		AD<double> x     = vars[x_start + t];
+		// radius of curvature
+		// https://www.intmath.com/applications-differentiation/8-radius-curvature.php
+		
+		AD<double> r_curve = CppAD::pow(1+CppAD::pow(coeffs[2]*x+coeffs[1],2),1.5)/CppAD::abs(2*coeffs[2]);
+		fg[0] += 5*CppAD::pow(vars[v_start+t]*vars[v_start+t]/r_curve,2);
+		
+		
+	}
 	
     fg[1 + x_start] = vars[x_start];
     fg[1 + y_start] = vars[y_start];
@@ -119,6 +132,11 @@ class FG_eval {
 	  
 	  AD<double> f0 = coeffs[0] + coeffs[1]*x0 + coeffs[2]*x0*x0;
 	  AD<double> psides0 = CppAD::atan(coeffs[1]+coeffs[2]*x0);
+	  
+	  if (t>1){
+		  delta0 = vars[delta_start + t -2];
+		  a0 = vars[delta_start +t -2];
+	  }
 
       // Here's `x` to get you started.
       // The idea here is to constraint this value to be 0.
@@ -131,7 +149,7 @@ class FG_eval {
       fg[1 + x_start + t] 	= x1 - (x0 + v0 * CppAD::cos(psi0) * dt);
 	  fg[1 + y_start + t] 	= y1 - (y0 + v0 * CppAD::sin(psi0) * dt);
 	  fg[1 + psi_start +t] 	= psi1 - (psi0 - v0*delta0*dt/Lf);
-	  fg[1 + v_start +t]	= v1 - (v0 + a0*dt);
+	  fg[1 + v_start +t]	= v1 - (v0 + a0*5*dt);
 	  fg[1 + cte_start + t] = cte1 - (f0 - y0 + v0*CppAD::sin(epsi0)*dt);
 	  fg[1 + epsi_start + t] = epsi1 - (psides0 - psi0 - v0*delta0*dt/Lf);
 	}
