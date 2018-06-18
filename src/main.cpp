@@ -66,7 +66,7 @@ Eigen::VectorXd polyfit(Eigen::VectorXd xvals, Eigen::VectorXd yvals,
 }
 
 Eigen::VectorXd globalKinematic(Eigen::VectorXd state,
-                                Eigen::VectorXd actuators,Eigen::VectorXd coeffs, double dt,int N) {
+                                Eigen::VectorXd actuators,double dt,int N) {
   Eigen::VectorXd next_state(state.size());
   
   //TODO: Implement the Global Kinematic Model, to return
@@ -81,20 +81,20 @@ Eigen::VectorXd globalKinematic(Eigen::VectorXd state,
   double psi = state(2);
   double v = state(3);   
   double Lf = 2.67;
-  double f = coeffs[0] + coeffs[1]*x + coeffs[2]*x*x;
-  double psides = atan(coeffs[1]+coeffs[2]*x);
+  /* double f = coeffs[0] + coeffs[1]*x + coeffs[2]*x*x;
+  double psides = atan(coeffs[1]+coeffs[2]*x); */
   
   for (int i = 0;i<N;i++){
 	  
 	next_state(0) = x + v*cos(psi)*dt;
 	next_state(1) = y + v*sin(psi)*dt;
 	next_state(2) = psi - (v*actuators(0)*dt)/Lf;
-	next_state(3) = v +  actuators(1)*dt;
-	next_state(4) = f - y + v*sin(psi)*dt;
+	next_state(3) = v +  5*actuators(1)*dt;
+	/* next_state(4) = f - y + v*sin(psi)*dt;
 	next_state(5) = psides - psi - (v*actuators(0)*dt)/Lf;
 	std::cout <<"delta : "<<actuators[0]<<"\t a : "<<actuators[1]<<std::endl;
 	std::cout <<"Coeffs: "<<coeffs[0]<<"\t"<<coeffs[1]<<"\t"<<coeffs[2]<<std::endl;
-	
+	 */
 	x = next_state(0);
 	y = next_state(1);
 	psi = next_state(2);
@@ -140,20 +140,15 @@ int main() {
 		  state<<px,py,psi,v;		  		  
 		  
 		  Eigen:: VectorXd actuate(2);
-		  actuate<<steer_angle,throttle;  
-		   	  
+		  actuate<<steer_angle,throttle;  		   	  
 		  		  
-		  Eigen::VectorXd new_state = globalKinematic(state,actuate,0.1,1);		  
-		  
-		  
-		  std::cout<< "Old_state: "<<state<<std::endl;
-		  std::cout<<"New_state: "<<new_state<<std::endl;
+		  Eigen::VectorXd new_state = globalKinematic(state,actuate,0.1,1);		  		  		  		 
 		  
 		  px = new_state(0);
 		  py = new_state(1);
 		  psi = new_state(2);
-		  v = new_state(3);
-		   */
+		  v = new_state(3); */
+		  
 		   
 		  for (size_t i =0;i < ptsx.size();i++){
 			  double x_car = ptsx[i] - px;
@@ -261,7 +256,7 @@ int main() {
           //
           // NOTE: REMEMBER TO SET THIS TO 100 MILLISECONDS BEFORE
           // SUBMITTING.
-          this_thread::sleep_for(chrono::milliseconds(0));
+          this_thread::sleep_for(chrono::milliseconds(100));
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
         }
       } else {
