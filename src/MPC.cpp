@@ -84,7 +84,6 @@ class FG_eval {
       fg[0] += CppAD::pow(vars[a_start + t], 2);
     }
 	
-	
 
     // Minimize the value gap between sequential actuations.
     for (size_t t = 0; t < N - 2; t++) {
